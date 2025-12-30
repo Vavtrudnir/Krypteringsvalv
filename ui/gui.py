@@ -5,13 +5,28 @@ Main CustomTkinter interface with Swedish localization.
 
 import tkinter as tk
 from tkinter import messagebox
-from typing import Optional, List
+from typing import Optional, List, Union
 from pathlib import Path
 
 import customtkinter as ctk
 
 from core.vfs import VirtualFileSystem, VfsError
+# from core.password_validator import PasswordStrength
+# from core.session_manager import SessionManager
 from ui.async_ops import AsyncOperations, OperationResult
+
+# 🔒 Critical: Ensure UTF-8 encoding for file operations
+# Temporarily remove locale settings
+# import sys
+# if sys.version_info >= (3, 7):
+#     import locale
+#     try:
+#         locale.setlocale(locale.LC_ALL, 'sv_SE.UTF-8')
+#     except locale.Error:
+#         try:
+#             locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+#         except locale.Error:
+#             pass  # Fallback to default
 
 
 class IconLoader:
@@ -98,7 +113,7 @@ class LoginScreen(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)  # For footer space
         
         # Main container - centered
-        self.container = ctk.CTkFrame(self, corner_radius=15, width=400, height=500)
+        self.container = ctk.CTkFrame(self, corner_radius=15, width=400, height=650)
         self.container.grid(row=1, column=0, sticky="nsew", padx=40, pady=20)
         self.container.grid_propagate(False)
         
@@ -158,6 +173,7 @@ class LoginScreen(ctk.CTkFrame):
         )
         self.password_entry.grid(row=1, column=0, pady=(0, 10), sticky="ew")
         self.password_entry.bind("<Return>", lambda e: self._unlock_vault())
+        # self.password_entry.bind("<KeyRelease>", self._on_password_change)
         
         # Buttons
         self.button_frame = ctk.CTkFrame(self.container)
@@ -187,6 +203,24 @@ class LoginScreen(ctk.CTkFrame):
         )
         self.create_button.grid(row=1, column=0, pady=(0, 10), sticky="ew")
         
+        # Password strength indicator
+        self.strength_frame = ctk.CTkFrame(self.container)
+        self.strength_frame.grid(row=6, column=0, pady=(5, 0), padx=40, sticky="ew")
+        self.strength_frame.grid_columnconfigure(0, weight=1)
+        
+        self.strength_label = ctk.CTkLabel(
+            self.strength_frame,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color="gray50"
+        )
+        self.strength_label.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        
+        # Temporarily remove progress bar to test
+        # self.strength_progress = ctk.CTkProgressBar(self.strength_frame, height=4)
+        # self.strength_progress.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
+        # self.strength_progress.set(0)
+        
         # Status label
         self.status_label = ctk.CTkLabel(
             self.container,
@@ -202,7 +236,7 @@ class LoginScreen(ctk.CTkFrame):
         
         self.version_label = ctk.CTkLabel(
             self.version_frame,
-            text="Hemliga valvet v1.0 | © 2025 | AES-256-GCM | Argon2id",
+            text="Hemliga valvet v1.0 | © 2025 | AES-256-GCM | Bcrypt",
             font=ctk.CTkFont(size=11),
             text_color="gray50"
         )
@@ -210,25 +244,75 @@ class LoginScreen(ctk.CTkFrame):
     
     def _unlock_vault(self):
         """Handle vault unlock."""
-        print("DEBUG: Unlock button clicked")  # Debug output
+        print("DEBUG: _unlock_vault called")  # Debug output
         password = self.password_entry.get()
+        print(f"DEBUG: Password entered: '{password}'")  # Debug output
+        
+        # Temporarily remove password validation
+        # is_valid, issues = PasswordStrength.validate_password(password)
+        # if not is_valid and len(password) > 0:
+        #     issue_text = ", ".join(issues[:3])  # Show max 3 issues
+        #     self.status_label.configure(text=f"Svagt lösenord: {issue_text}", text_color="orange")
+        #     return
+        
         if not password:
+            print("DEBUG: No password entered")  # Debug output
             self.status_label.configure(text="Ange ett lösenord", text_color="red")
             return
         
+        print("DEBUG: Calling app.unlock_vault")  # Debug output
         # Let app handle the unlock
         self.app.unlock_vault(password)
     
     def _create_vault(self):
         """Handle new vault creation."""
-        print("DEBUG: Create vault button clicked")  # Debug output
+        print("DEBUG: _create_vault called")  # Debug output
         password = self.password_entry.get()
+        print(f"DEBUG: Password entered: '{password}'")  # Debug output
+        
         if not password:
+            print("DEBUG: No password entered")  # Debug output
             self.status_label.configure(text="Ange ett lösenord", text_color="red")
             return
         
-        # Let app handle the creation
+        print("DEBUG: Calling app.create_new_vault")  # Debug output
         self.app.create_new_vault(password)
+    
+    # Temporarily remove password change handler
+    # def _on_password_change(self, event):
+    #     """Handle password change for strength indicator."""
+    #     password = self.password_entry.get()
+    #     
+    #     if not password:
+    #         self.strength_label.configure(text="")
+    #         # self.strength_progress.set(0)
+    #         return
+    #     
+    #     score = PasswordStrength.get_strength_score(password)
+    #     strength_text = PasswordStrength.get_strength_text(score)
+    #     
+    #     # Update progress bar color based on strength
+    #     if score < 30:
+    #         color = "red"
+    #     elif score < 50:
+    #         color = "orange"
+    #     elif score < 70:
+    #         color = "yellow"
+    #     elif score < 90:
+    #         color = "green"
+    #     else:
+    #         color = "dark green"
+    #     
+    #     # self.strength_progress.set(score / 100)
+    #     self.strength_label.configure(text=f"Styrka: {strength_text} ({score}/100)")
+    #     
+    #     # Validate and show issues
+    #     is_valid, issues = PasswordStrength.validate_password(password)
+    #     if not is_valid and len(password) > 0:
+    #         issue_text = ", ".join(issues[:2])
+    #         self.status_label.configure(text=f"Saknas: {issue_text}", text_color="orange")
+    #     else:
+    #         self.status_label.configure(text="", text_color="green")
     
     def show_error(self, message: str):
         """Show error message."""
@@ -374,43 +458,43 @@ class MainInterface(ctk.CTkFrame):
         self.vfs = vfs
         self._refresh_file_tree()
         self._refresh_file_list()
-    
+
     def _refresh_file_tree(self):
         """Refresh the file tree sidebar."""
         # Clear existing widgets
         for widget in self.file_tree.winfo_children():
             widget.destroy()
-        
+
         if not self.vfs:
             return
-        
+
         # Get directory tree
         tree = self.vfs.get_directory_tree()
         self._build_tree_items(tree, self.file_tree, "")
-    
+
     def _build_tree_items(self, tree: dict, parent, path: str):
         """Recursively build tree items."""
         for name, item in tree.items():
             item_path = f"{path}/{name}" if path else f"/{name}"
-            
+
             if isinstance(item, dict) and "offset" not in item:
                 # This is a directory
                 frame = ctk.CTkFrame(parent)
                 frame.pack(fill="x", pady=2)
-                
+
                 label = ctk.CTkLabel(frame, text=f"📁 {name}")
                 label.pack(side="left", padx=5)
-                
+
                 # Recursively add children
                 self._build_tree_items(item, parent, item_path)
             else:
                 # This is a file
                 frame = ctk.CTkFrame(parent)
                 frame.pack(fill="x", pady=2)
-                
+
                 label = ctk.CTkLabel(frame, text=f"📄 {name}")
                 label.pack(side="left", padx=5)
-    
+
     def _refresh_file_list(self):
         """Refresh the file list."""
         # Clear existing widgets
@@ -530,6 +614,7 @@ class VaultApp(ctk.CTk):
         self.assets_dir = Path(__file__).parent.parent / "assets"
         self.icon_loader = IconLoader(self.assets_dir)
         self.async_ops = AsyncOperations(self)
+        # self.session_manager = SessionManager(timeout_minutes=15, lock_callback=self._on_session_timeout)
         
         self.vfs: Optional[VirtualFileSystem] = None
         self.vault_path: Optional[str] = None
@@ -540,6 +625,9 @@ class VaultApp(ctk.CTk):
         
         # Center window
         self._center_window()
+        
+        # Bind activity events
+        # self._bind_activity_events()
     
     def _setup_ui(self):
         """Setup the main UI."""
@@ -563,53 +651,88 @@ class VaultApp(ctk.CTk):
     
     def create_new_vault(self, password: str):
         """Create a new vault."""
-        print("DEBUG: Creating new vault...")
-        # Ask for vault location
-        vault_path = self.async_ops.show_file_dialog(
-            "Skapa nytt valv",
-            [("Valv filer", "*.vault"), ("Alla filer", "*.*")],
-            mode="save"
-        )
+        print("DEBUG: create_new_vault called")  # Debug output
         
-        print(f"DEBUG: Selected vault path: {vault_path}")
-        if not vault_path:
-            print("DEBUG: No vault path selected, returning")
-            return
+        # Show file dialog to choose vault location
+        def on_file_selected(vault_path):
+            if not vault_path:
+                print("DEBUG: No vault path selected")  # Debug output
+                return
+            
+            print(f"DEBUG: Vault path selected: {vault_path}")  # Debug output
+            
+            # ULTRA SIMPLE TEST - Try to create a simple file first
+            import os
+            try:
+                print(f"DEBUG: Testing simple file creation at: {vault_path}")  # Debug output
+                with open(vault_path, 'w') as f:
+                    f.write("test")
+                print("DEBUG: Simple file creation SUCCESS!")  # Debug output
+                os.remove(vault_path)  # Clean up test file
+                print("DEBUG: Test file cleaned up")  # Debug output
+            except Exception as e:
+                print(f"DEBUG: Simple file creation FAILED: {e}")  # Debug output
+                self.login_screen.show_error(f"FILTEST MISSLYCKADES: {e}. Välj en annan plats!")
+                return
+            
+            # If simple file works, try vault creation
+            self.vault_path = vault_path
+            self.password = password
+            
+            # Create vault asynchronously
+            print("DEBUG: About to call async_ops.create_vault")  # Debug output
+            self.async_ops.create_vault(vault_path, password, self._on_vault_created)
+            print("DEBUG: async_ops.create_vault called")  # Debug output
         
-        self.vault_path = vault_path
-        self.password = password
-        
-        # Create vault asynchronously
-        print("DEBUG: Starting vault creation...")
-        self.async_ops.create_vault(vault_path, password, self._on_vault_created)
+        # Show file dialog
+        print("DEBUG: Showing file dialog for vault creation")  # Debug output
+        self.async_ops.show_file_dialog(
+            "Spara valvfil",
+            [("Valvfiler", "*.vault"), ("Alla filer", "*.*")],
+            "save"
+        ).add_done_callback(lambda future: on_file_selected(future.result()))
     
     def unlock_vault(self, password: str):
         """Unlock existing vault."""
-        print("DEBUG: Unlocking vault...")
-        # Ask for vault location
-        vault_path = self.async_ops.show_file_dialog(
-            "Öppna valv",
-            [("Valv filer", "*.vault"), ("Alla filer", "*.*")]
-        )
+        print("DEBUG: unlock_vault called")  # Debug output
         
-        print(f"DEBUG: Selected vault path: {vault_path}")
-        if not vault_path:
-            print("DEBUG: No vault path selected, returning")
-            return
+        # Show file dialog to choose vault file
+        def on_file_selected(vault_path):
+            if not vault_path:
+                print("DEBUG: No vault path selected")  # Debug output
+                return
+            
+            print(f"DEBUG: Vault path selected: {vault_path}")  # Debug output
+            
+            # Check if file exists
+            import os
+            if not os.path.exists(vault_path):
+                print(f"DEBUG: Vault file does not exist: {vault_path}")  # Debug output
+                self.login_screen.show_error(f"Valvfilen finns inte: {vault_path}")
+                return
+            
+            self.vault_path = vault_path
+            self.password = password
+            
+            # Open vault asynchronously
+            print("DEBUG: About to call async_ops.open_vault")  # Debug output
+            self.async_ops.open_vault(vault_path, password, self._on_vault_opened)
+            print("DEBUG: async_ops.open_vault called")  # Debug output
         
-        self.vault_path = vault_path
-        self.password = password
-        
-        # Open vault asynchronously
-        print("DEBUG: Starting vault unlock...")
-        self.async_ops.open_vault(vault_path, password, self._on_vault_opened)
+        # Show file dialog
+        print("DEBUG: Showing file dialog for vault opening")  # Debug output
+        self.async_ops.show_file_dialog(
+            "Öppna valvfil",
+            [("Valvfiler", "*.vault"), ("Alla filer", "*.*")],
+            "open"
+        ).add_done_callback(lambda future: on_file_selected(future.result()))
     
     def _on_vault_created(self, result: OperationResult):
         """Handle vault creation completion."""
         if result.success:
-            self.login_screen.show_success("Valv skapat!")
-            # Open the newly created vault
-            self.async_ops.open_vault(self.vault_path, self.password, self._on_vault_opened)
+            self.login_screen.show_success("Valv skapat! Använd 'Lås upp valv' för att öppna det.")
+            # Don't auto-open - let user manually unlock
+            # self.async_ops.open_vault(self.vault_path, self.password, self._on_vault_opened)
         else:
             self.login_screen.show_error(f"Kunde inte skapa valv: {result.error}")
     
@@ -627,6 +750,45 @@ class VaultApp(ctk.CTk):
         self.login_screen.grid_forget()
         self.main_interface.grid(row=0, column=0, sticky="nsew")
         self.main_interface.set_vfs(self.vfs)
+        
+        # Temporarily remove session monitoring
+        # self.session_manager.start_session()
+    
+    # Temporarily remove session timeout functions
+    # def _on_session_timeout(self):
+    #     """Handle session timeout."""
+    #     if self.vfs:  # Only timeout if vault is open
+    #         messagebox.showwarning(
+    #             "Session timeout", 
+    #             "Din session har löpt ut av inaktivitet. Valvet låses för säkerhet."
+    #         )
+    #         self._lock_vault()
+    # 
+    # def _lock_vault(self):
+    #     """Lock the vault and return to login screen."""
+    #     # Stop session monitoring
+    #     self.session_manager.stop_session()
+    #     
+    #     # Clear sensitive data
+    #     self.vfs = None
+    #     self.vault_path = None
+    #     self.password = None
+    #     
+    #     # Return to login screen
+    #     self.main_interface.grid_forget()
+    #     self.login_screen.grid(row=0, column=0, sticky="nsew")
+    #     self.login_screen.clear_password()
+    #     self.login_screen.show_status("Valvet låst", "green")
+    # 
+    # def _bind_activity_events(self):
+    #     """Bind events that indicate user activity."""
+    #     # Bind mouse movement and clicks
+    #     self.bind("<Motion>", lambda e: self.session_manager.update_activity())
+    #     self.bind("<Button-1>", lambda e: self.session_manager.update_activity())
+    #     self.bind("<Key>", lambda e: self.session_manager.update_activity())
+    #     
+    #     # Bind window focus
+    #     self.bind("<FocusIn>", lambda e: self.session_manager.update_activity())
     
     def add_files_to_vault(self, file_paths: List[Path]):
         """Add files to vault."""
@@ -680,6 +842,12 @@ class VaultApp(ctk.CTk):
             if messagebox.askyesno("Osparade ändringar", "Det finns osparade ändringar. Vill du spara innan du stänger?"):
                 self.async_ops.save_vault(self.vfs, self.password, lambda result: self.destroy())
                 return
+        
+        # 🔒 Critical: Clear sensitive data from memory
+        if self.password:
+            self.password = None
+        if self.vault_path:
+            self.vault_path = None
         
         self.destroy()
 

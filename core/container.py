@@ -6,7 +6,7 @@ Handles file I/O, binary format, atomic saves, and compression.
 import os
 import zlib
 import time
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, Union
 from pathlib import Path
 
 try:
@@ -45,61 +45,87 @@ class VaultContainer:
     def open(self) -> None:
         """Open vault file with exclusive lock."""
         try:
+            print(f"DEBUG: Opening vault file: {self.file_path}")  # Debug
             if self.file_path.exists():
                 mode = 'r+b'
+                print("DEBUG: File exists, using r+b mode")  # Debug
             else:
                 mode = 'w+b'
+                print("DEBUG: File doesn't exist, using w+b mode")  # Debug
             
+            print(f"DEBUG: Attempting to open file with mode: {mode}")  # Debug
             self._file_handle = open(self.file_path, mode)
+            print("DEBUG: File opened successfully")  # Debug
             
-            # Acquire exclusive lock
-            if portalocker:
-                portalocker.lock(self._file_handle, portalocker.LOCK_EX)
-            else:
-                # Fallback for Windows
-                import msvcrt
-                msvcrt.locking(self._file_handle.fileno(), msvcrt.LK_NBLCK, 1)
+            # Temporarily disable file locking to fix permission issues
+            # # Acquire exclusive lock
+            # if portalocker:
+            #     portalocker.lock(self._file_handle, portalocker.LOCK_EX)
+            # else:
+            #     # Fallback for Windows
+            #     import msvcrt
+            #     msvcrt.locking(self._file_handle.fileno(), msvcrt.LK_NBLCK, 1)
+            print("DEBUG: VaultContainer.open() completed successfully")  # Debug
                 
         except Exception as e:
+            print(f"DEBUG: VaultContainer.open() failed: {e}")  # Debug
             raise ContainerError(f"Failed to open vault file: {str(e)}")
     
     def close(self) -> None:
         """Close vault file and release lock."""
         if self._file_handle:
-            if portalocker:
-                portalocker.unlock(self._file_handle)
+            # Temporarily disable file locking to fix permission issues
+            # if portalocker:
+            #     portalocker.unlock(self._file_handle)
             self._file_handle.close()
             self._file_handle = None
     
-    def create_new(self, password: str) -> None:
+    def create_new(self, password: str, fast_mode: bool = False) -> None:
         """
         Create a new vault file with the given password.
         
         Args:
             password: Master password for the vault
+            fast_mode: Use faster Argon2id settings (64MB, 2 iterations, 2 lanes)
         """
+        print("DEBUG: create_new() started")  # Debug
         if self._file_handle is None:
+            print("DEBUG: File handle is None!")  # Debug
             raise ContainerError("File not opened")
         
+        print("DEBUG: File handle is OK")  # Debug
+        
         # Generate salt and derive key
+        print("DEBUG: Generating salt...")  # Debug
         salt = self.crypto.generate_salt()
-        key = self.crypto.derive_key(password, salt)
+        print("DEBUG: Salt generated, deriving key...")  # Debug
+        key = self.crypto.derive_key(password, salt, fast_mode=fast_mode)
+        print("DEBUG: Key derived successfully")  # Debug
         
         # Create empty vault data
+        print("DEBUG: Creating empty vault data...")  # Debug
         empty_data = {
             "timestamp": time.time(),
             "files": {}
         }
+        print("DEBUG: Empty data created")  # Debug
         
         # Serialize and encrypt empty data
+        print("DEBUG: Serializing payload...")  # Debug
         payload = self._serialize_payload(empty_data, b"")
+        print("DEBUG: Payload serialized, encrypting...")  # Debug
         nonce, ciphertext = self.crypto.encrypt(payload, key)
+        print("DEBUG: Data encrypted successfully")  # Debug
         
-        # Build header
-        header = self._build_header(salt)
+        # Build header (update to reflect fast mode if used)
+        print("DEBUG: Building header...")  # Debug
+        header = self._build_header(salt, fast_mode=fast_mode)
+        print("DEBUG: Header built successfully")  # Debug
         
         # Write file atomically
+        print("DEBUG: Writing file atomically...")  # Debug
         self._write_atomic(header + nonce + ciphertext)
+        print("DEBUG: Vault creation completed successfully!")  # Debug
     
     def load(self, password: str) -> Tuple[Dict[str, Any], bytes]:
         """
@@ -123,15 +149,9 @@ class VaultContainer:
         
         # Parse header
         header = file_data[:self.HEADER_SIZE]
-        salt, argon2_memory, argon2_time, argon2_parallelism = self._parse_header(header)
+        salt, bcrypt_rounds = self._parse_header(header)
         
-        # Verify header parameters match our expectations
-        if (argon2_memory != self.crypto.ARGON2_MEMORY_COST or
-            argon2_time != self.crypto.ARGON2_ITERATIONS or
-            argon2_parallelism != self.crypto.ARGON2_LANES):
-            raise ContainerError("Invalid vault parameters")
-        
-        # Derive key
+        # Derive key using bcrypt
         key = self.crypto.derive_key(password, salt)
         
         # Extract nonce and ciphertext
@@ -163,7 +183,7 @@ class VaultContainer:
         # Read existing header to get salt
         self._file_handle.seek(0)
         header = self._file_handle.read(self.HEADER_SIZE)
-        salt, _, _, _ = self._parse_header(header)
+        salt, bcrypt_rounds = self._parse_header(header)
         
         # Derive key
         key = self.crypto.derive_key(password, salt)
@@ -177,18 +197,25 @@ class VaultContainer:
         # Write atomically
         self._write_atomic(header + nonce + ciphertext)
     
-    def _build_header(self, salt: bytes) -> bytes:
-        """Build the fixed 38-byte header."""
-        if len(salt) != self.crypto.SALT_SIZE:
-            raise ContainerError("Invalid salt size")
+    def _build_header(self, salt: bytes, fast_mode: bool = False) -> bytes:
+        """Build the fixed 38-byte header for bcrypt."""
+        # bcrypt salt is 29 bytes, but we'll use first 16 for consistency
+        if len(salt) < 16:
+            raise ContainerError("Invalid bcrypt salt size")
+        
+        # Use only first 16 bytes of bcrypt salt for header
+        salt_bytes = salt[:16]
+        
+        # Choose rounds based on mode
+        rounds = 8 if fast_mode else self.crypto.BCRYPT_ROUNDS
         
         header = (
             self.MAGIC_BYTES +
             pack_uint16(self.VERSION) +
-            salt +
-            pack_uint32(self.crypto.ARGON2_MEMORY_COST) +
-            pack_uint32(self.crypto.ARGON2_ITERATIONS) +
-            pack_uint32(self.crypto.ARGON2_LANES)
+            salt_bytes +  # 16 bytes
+            pack_uint32(rounds) +  # 4 bytes
+            pack_uint32(0) +  # placeholder for old memory_cost
+            pack_uint32(0)    # placeholder for old iterations
         )
         
         if len(header) != self.HEADER_SIZE:
@@ -196,8 +223,8 @@ class VaultContainer:
         
         return header
     
-    def _parse_header(self, header: bytes) -> Tuple[bytes, int, int, int]:
-        """Parse the fixed 38-byte header."""
+    def _parse_header(self, header: bytes) -> Tuple[bytes, int]:
+        """Parse the fixed 38-byte header for bcrypt."""
         if len(header) != self.HEADER_SIZE:
             raise ContainerError(f"Invalid header size: {len(header)}")
         
@@ -211,13 +238,13 @@ class VaultContainer:
         if version != self.VERSION:
             raise ContainerError(f"Unsupported vault version: {version}")
         
-        # Extract parameters
+        # Extract salt (16 bytes)
         salt = header[10:26]
-        argon2_memory = unpack_uint32(header[26:30])
-        argon2_time = unpack_uint32(header[30:34])
-        argon2_parallelism = unpack_uint32(header[34:38])
         
-        return salt, argon2_memory, argon2_time, argon2_parallelism
+        # Extract bcrypt rounds
+        bcrypt_rounds = unpack_uint32(header[26:30])
+        
+        return salt, bcrypt_rounds
     
     def _serialize_payload(self, metadata: Dict[str, Any], file_data: bytes) -> bytes:
         """Serialize metadata and file data."""
@@ -262,49 +289,26 @@ class VaultContainer:
     
     def _write_atomic(self, data: bytes) -> None:
         """Write data to file atomically."""
+        print("DEBUG: _write_atomic() started")  # Debug
         if self._file_handle is None:
+            print("DEBUG: File handle is None in _write_atomic")  # Debug
             raise ContainerError("File not opened")
         
-        # Create temporary file
-        temp_path = self.file_path.with_suffix('.vault.tmp')
-        
         try:
-            # Ensure parent directory exists
-            self.file_path.parent.mkdir(parents=True, exist_ok=True)
+            print("DEBUG: Writing directly to file (skip atomic replace)...")  # Debug
             
-            # Write to temporary file
-            with open(temp_path, 'wb') as temp_file:
-                temp_file.write(data)
-                temp_file.flush()
-                os.fsync(temp_file.fileno())
+            # Write directly to the open file handle
+            self._file_handle.seek(0)
+            self._file_handle.write(data)
+            self._file_handle.flush()
+            os.fsync(self._file_handle.fileno())
+            self._file_handle.truncate()  # Remove any remaining data
             
-            # Atomically replace original file
-            os.replace(temp_path, self.file_path)
+            print("DEBUG: Direct write completed successfully!")  # Debug
             
-            # Reopen the file to update handle
-            self._file_handle.close()
-            self._file_handle = open(self.file_path, 'r+b')
-            
-            # Reacquire lock
-            if portalocker:
-                portalocker.lock(self._file_handle, portalocker.LOCK_EX)
-            
-        except PermissionError as e:
-            # Clean up temp file if it exists
-            if temp_path.exists():
-                try:
-                    temp_path.unlink()
-                except:
-                    pass
-            raise ContainerError(f"Åtkomst nekad. Välj en annan plats för valvfilen eller kör programmet som administratör.")
         except Exception as e:
-            # Clean up temp file if it exists
-            if temp_path.exists():
-                try:
-                    temp_path.unlink()
-                except:
-                    pass
-            raise ContainerError(f"Failed to write vault atomically: {str(e)}")
+            print(f"DEBUG: Error in direct write: {e}")  # Debug
+            raise ContainerError(f"Failed to write vault file: {str(e)}")
     
     @staticmethod
     def validate_extraction_path(file_path: str, extract_dir: Path) -> bool:

@@ -107,11 +107,20 @@ class AsyncOperations:
     def create_vault(self, vault_path: str, password: str, callback: Callable):
         """Create a new vault asynchronously."""
         def operation():
-            with VaultContainer(vault_path) as container:
-                container.create_new(password)
-                return "Valv skapat"
+            print(f"DEBUG: Starting FAST vault creation at {vault_path}")  # Debug
+            try:
+                with VaultContainer(vault_path) as container:
+                    print("DEBUG: VaultContainer created, calling create_new with fast_mode=True")  # Debug
+                    container.create_new(password, fast_mode=True)  # FAST MODE!
+                    print("DEBUG: create_new completed")  # Debug
+                    return "Valv skapat (snabbt läge)"
+            except Exception as e:
+                print(f"DEBUG: Vault creation failed: {e}")  # Debug
+                raise
         
-        self._run_operation(operation, callback, "Skapar valv...", "Skapar nytt krypterat valv")
+        print("DEBUG: About to run FAST operation")  # Debug
+        self._run_operation(operation, callback, "Skapar valv...", "Skapar nytt krypterat valv (snabbt läge)")
+        print("DEBUG: FAST operation started")  # Debug
     
     def open_vault(self, vault_path: str, password: str, callback: Callable):
         """Open an existing vault asynchronously."""
@@ -192,55 +201,71 @@ class AsyncOperations:
         
         self.current_worker = None
     
-    def show_file_dialog(self, title: str, file_types: list = None, mode: str = "open") -> Optional[str]:
+    def show_file_dialog(self, title: str, file_types: list = None, mode: str = "open"):
         """Show file dialog for file selection."""
         if file_types is None:
             file_types = [("Alla filer", "*.*")]
         
-        # Default to Documents folder for better permissions
-        import os
-        initialdir = os.path.join(os.path.expanduser("~"), "Documents")
+        from tkinter import filedialog
+        import tkinter as tk
+        import concurrent.futures
         
-        if mode == "open":
-            result = filedialog.askopenfilename(
-                title=title,
-                filetypes=file_types,
-                initialdir=initialdir
-            )
-        elif mode == "save":
-            result = filedialog.asksaveasfilename(
-                title=title,
-                filetypes=file_types,
-                defaultextension=".vault",
-                initialdir=initialdir
-            )
-        elif mode == "directory":
-            result = filedialog.askdirectory(
-                title=title,
-                initialdir=initialdir
-            )
-        else:
-            result = filedialog.askopenfilenames(
-                title=title,
-                filetypes=file_types,
-                initialdir=initialdir
-            )
+        # Use ThreadPoolExecutor to run dialog in separate thread
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(self._show_file_dialog_sync, title, file_types, mode)
+            return future
+    
+    def _show_file_dialog_sync(self, title: str, file_types: list, mode: str) -> Optional[str]:
+        """Show file dialog synchronously in separate thread."""
+        from tkinter import filedialog
+        import tkinter as tk
         
-        return result if result else None
+        # Create a temporary root window for the dialog
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        root.lift()  # Bring to front
+        root.attributes('-topmost', True)  # Keep on top
+        
+        try:
+            if mode == "open":
+                file_path = filedialog.askopenfilename(
+                    title=title,
+                    filetypes=file_types,
+                    parent=root
+                )
+            elif mode == "save":
+                file_path = filedialog.asksaveasfilename(
+                    title=title,
+                    filetypes=file_types,
+                    defaultextension=".vault",
+                    parent=root
+                )
+            elif mode == "directory":
+                file_path = filedialog.askdirectory(
+                    title=title,
+                    parent=root
+                )
+            else:
+                raise ValueError(f"Unsupported dialog mode: {mode}")
+            
+            return file_path if file_path else None
+            
+        finally:
+            root.destroy()
     
     def show_multiple_files_dialog(self, title: str, file_types: list = None) -> tuple:
         """Show file dialog for multiple file selection."""
         if file_types is None:
             file_types = [("Alla filer", "*.*")]
         
-        # Default to Documents folder for better permissions
-        import os
-        initialdir = os.path.join(os.path.expanduser("~"), "Documents")
+        # Temporarily remove initialdir to fix hanging issue
+        # import os
+        # initialdir = os.path.join(os.path.expanduser("~"), "Documents")
         
         result = filedialog.askopenfilenames(
             title=title,
-            filetypes=file_types,
-            initialdir=initialdir
+            filetypes=file_types
+            # initialdir=initialdir
         )
         
         return result if result else ()

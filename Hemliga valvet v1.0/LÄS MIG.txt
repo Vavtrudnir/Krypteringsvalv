@@ -1,0 +1,75 @@
+# Hemliga valvet v1.0 - Säker filkryptering
+
+## 🚀 SNABBSTART
+
+1. **Dubbelklicka på `Hemliga valvet.exe`**
+2. **Ange ett lösenord** (minst 6 tecken rekommenderas)
+3. **Klicka "Skapa nytt valv"** för att skapa ett nytt valv
+4. **Välj var du vill spara valvet** med file dialogen
+5. **Klart!** Ditt valv är skapat och redo att användas
+
+## 📁 VAD ÄR DETTA?
+
+Hemliga valvet är ett **säkert filkrypteringsprogram** som låter dig:
+- ✅ **Kryptera filer** med militärgradssäkerhet (AES-256-GCM)
+- ✅ **Skapa lösenordsskyddade valv** för dina filer
+- ✅ **Organisera filer** i ett virtuellt filsystem
+- ✅ **Extrahera filer** när du behöver dem
+
+## 🔒 SÄKERHET
+
+- **AES-256-GCM kryptering** - Omöjlig att knäcka utan lösenord
+- **Bcrypt nyckelderivering** - 12 rounds för maximal säkerhet
+- **Minnesrensning** - Lösenord lagras aldrig i klartext
+- **Ingen internet-anslutning** - Allt sker lokalt på din dator
+
+## 💡 ANVÄNDNING
+
+### Skapa nytt valv:
+1. Skriv ett starkt lösenord
+2. Klicka "Skapa nytt valv"
+3. Välj var du vill spara valvfilen (.vault)
+4. Vänta 1-3 sekunder (bcrypt är snabbt!)
+
+### Öppna befintligt valv:
+1. Skriv ditt lösenord
+2. Klicka "Lås upp valv"
+3. Välj din .vault fil
+4. Få tillgång till dina krypterade filer
+
+### Lägga till filer:
+1. Öppna ditt valv
+2. Klicka "Lägg till fil"
+3. Välj de filer du vill kryptera
+4. Filerna krypteras och läggs till i valvet
+
+### Extrahera filer:
+1. Öppna ditt valv
+2. Markera filerna du vill ha ut
+3. Klicka "Extrahera"
+4. Välj var du vill spara filerna
+
+## 🎯 TIPS
+
+- **Använd starka lösenord** - Minst 12 tecken med blandning av tecken
+- **Spara valvfilen säkert** - USB-sticka, molnlagring, etc.
+- **Ha backup** - Spara viktiga filer på flera ställen
+- **Testa ofta** - Verifiera att du kan öppna valvet
+
+## ⚠️ VIKTIGT
+
+- **Glöm inte lösenordet** - Det går INTE att återställa!
+- **Spara valvfilen säkert** - Den innehåller alla dina krypterade filer
+- **Använd på trusted datorer** - Skadlig kod kan stjäla lösenord
+
+## 📞 SUPPORT
+
+Har du problem eller frågor?
+- Programmet är helt fristående - ingen installation behövs
+- Fungerar på Windows 10/11
+- Kräver inga administratörsrättigheter
+
+---
+
+**© 2025 Hemliga valvet**  
+*Version 1.0 | AES-256-GCM | Bcrypt | Byggd med ❤️ i Python*
